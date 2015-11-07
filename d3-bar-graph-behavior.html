@@ -12,28 +12,48 @@
               value: 20,
               notify: true,
           },
-          chart: {
-              type: Object,
-              notify: true,
-              value: function() { return {}; }
+          width: {
+              type: Number,
+              value: 0,
+              notify: true
           }
       },
 
-      // observers: [ '_refresh(barHeight)' ],
+      listeners: {
+          'resize': '_handleResize'
+      },
+
+      observers: [ '_refresh(barHeight, data.splice, width)' ],
+
+      _handleResize: function(event) {
+            var self = this;
+            var firer = event.detail.firer;
+            if(firer === self.parentNode) {
+                self._refresh();
+            }
+      },
+
+      _computeWidth: function() {
+          var self = this;
+          var vp = self.parentNode.getViewPort();
+          return self.width ? self.width: vp.getBoundingClientRect().width;
+      },
 
       attached: function() {
           var self = this;
-          // self.async(self._refresh);
+          self.async(function() {
+              self.parentNode.addResizeListener(self);
+          });
       },
 
       _refresh: function(barHeight, data, width) {
           var self = this;
-          self._drawChart();
+          self._draw();
       },
 
-      _drawChart: function() {
+      _draw: function() {
           var self = this;
-
+          var chart = d3.select(self.parentNode.getViewPort());
           var groups = chart.selectAll("g")
               .data(self.data, function(d, i) { return i; });
 
@@ -45,7 +65,7 @@
 
           var x = d3.scale.linear()
                   .domain([0, d3.max(self.data)])
-                  .range([0, self.width]);
+                  .range([0, self._computeWidth()]);
 
 
           var bars = chart.selectAll('g');
