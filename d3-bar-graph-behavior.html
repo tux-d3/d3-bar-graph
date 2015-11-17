@@ -16,22 +16,17 @@
               type: Number,
               value: 0,
               notify: true
+          },
+          dataSet: {
+              type: String,
+              value: 'set',
+              notify: true
           }
       },
 
-      listeners: {
-          'resize': '_handleResize'
-      },
 
-      observers: [ '_refresh(barHeight, data.splice, width)' ],
+      observers: [ '_handleDataSetChange(dataSet)', '_refresh(barHeight, data.*, width)' ],
 
-      _handleResize: function(event) {
-            var self = this;
-            var firer = event.detail.firer;
-            if(firer === self.parentNode) {
-                self._refresh();
-            }
-      },
 
       _computeWidth: function() {
           var self = this;
@@ -39,48 +34,100 @@
           return self.width ? self.width: vp.getBoundingClientRect().width;
       },
 
+      _computeHeight: function() {
+          var self = this;
+          var vp = self.parentNode.getViewPort();
+          return self.height ? self.height: vp.getBoundingClientRect().height;
+      },
+
       attached: function() {
           var self = this;
           self.async(function() {
               self.parentNode.addResizeListener(self);
+              self._refresh();
           });
       },
 
       _refresh: function(barHeight, data, width) {
           var self = this;
-          self._draw();
+          if(self.isAttached) {
+              self._draw();
+          }
       },
 
-      _draw: function() {
+      _handleDataSetChange: function(dataSet) {
+          var self = this;
+          if(self.isAttached) {
+              self._draw(true);
+          }
+      },
+
+
+      _draw: function(clear) {
           var self = this;
           var chart = d3.select(self.parentNode.getViewPort());
-          var groups = chart.selectAll("g")
-              .data(self.data, function(d, i) { return i; });
+          var wrapper = chart.select("g.d3-bar-graph-wrapper");
 
-          var bar = groups.enter().append("g");
+          var transition = d3.transition();
 
-          bar.append("rect");
-          bar.append("text");
+          if(wrapper.empty()) {
+              chart.append("g")
+              .classed("d3-bar-graph-wrapper", true)
+              .attr('width', self._computeWidth())
+              .attr('height', self._computeHeight());
+          }
 
+          if(clear) {
+              var groups = wrapper.selectAll('g');
+              groups.selectAll('rect')
+                    .transition()
+                        .ease('quad-in-out')
+                        .duration(750)
+                        .attr('width', 0)
+                        .style('opacity', 0)
+                        .end(function() {
+                            groups.remove();
+                            __do_draw();
+                        })
+                    ;
+          }
+          else {
+              transition.transition().end(__do_draw);
+          }
 
-          var x = d3.scale.linear()
-                  .domain([0, d3.max(self.data)])
+          function __do_draw() {
+              var x = d3.scale.linear()
+                  .domain([0, d3.max(self.data[self.dataSet], function(d) { return XP.isObject(d) ? d.value : d; })])
                   .range([0, self._computeWidth()]);
 
+              var groups = wrapper
+                  .selectAll("g")
+                  .data(self.data[self.dataSet]);
 
-          var bars = chart.selectAll('g');
-          bars.attr("transform", function(d, i) { return "translate(0," + i * self.barHeight + ")"; });
-          bars.selectAll('rect')
-              .attr('width', function(d) { return x(d); })
-              .attr("height", self.barHeight - 1);
+              var bar = groups.enter().append("g");
 
-          bars.selectAll('text')
-              .attr("x", function(d) { return x(d) - 3; })
-              .attr("y", self.barHeight / 2)
-              .attr("dy", ".35em")
-              .text(function(d) { return d; });
+              bar.append("rect");
+              bar.append("text");
 
-          groups.exit().remove();
+              var bars = wrapper.selectAll('g');
+              bars.attr("transform", function(d, i) { return "translate(0," + i * self.barHeight + ")"; });
+              bars.selectAll('rect')
+                  .attr('width', 0)
+                  .attr("height", self.barHeight - 1)
+                  .style('opacity', 0)
+                  .transition()
+                        .duration(750)
+                        .ease('quad-in-out')
+                        .attr('width', function(d) { return x(XP.isObject(d) ? d.value : d); })
+                        .style('opacity', 1)
+                        ;
+
+              bars.selectAll('text')
+                  .attr("y", self.barHeight / 2)
+                  .attr("dy", ".35em")
+                  .text(function(d) { return XP.isObject(d) ? d.label + '[' + d.value + ']': d; })
+                  .attr("x", function(d) { return x(XP.isObject(d)? d.value : d) - 10; });
+          }
 
       }
   };
